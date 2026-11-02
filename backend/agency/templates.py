@@ -21,7 +21,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "src" / "templates"
+TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "src" / "templates"  # repo root, outside backend/
 REGISTRY_PATH = TEMPLATES_DIR / "registry.json"
 SHARED_DIR = TEMPLATES_DIR / "_shared"
 POLICY_FILE = Path(".agency") / "policy.json"  # written into each job workspace at seed time

@@ -1,0 +1,10 @@
+{
+  "name": "agency-frontend",
+  "private": true,
+  "description": "Convenience scripts only. Each template in src/templates is a standalone app with its own dependencies.",
+  "scripts": {
+    "build:t1": "npm --prefix src/templates/t1-minimal-editorial ci && npm --prefix src/templates/t1-minimal-editorial run build",
+    "build:t2": "npm --prefix src/templates/t2-glass-scroll-story ci && npm --prefix src/templates/t2-glass-scroll-story run build",
+    "build:t3": "npm --prefix src/templates/t3-liquid-glass-flagship ci && npm --prefix src/templates/t3-liquid-glass-flagship run build"
+  }
+}

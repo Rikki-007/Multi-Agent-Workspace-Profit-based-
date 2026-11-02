@@ -2,3 +2,5 @@
 -e .[dev]
 # xxhash 4.x wheels are blocked by Windows Smart App Control on this machine; 3.x loads fine.
 xxhash<4
+# Same story: uuid_utils 0.19 wheels are blocked here; 0.12 loads fine.
+uuid_utils<0.13
