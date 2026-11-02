@@ -1,0 +1,50 @@
+{
+  "$comment": "Single source of truth for site templates and what each tier may ship. Enforced by agency/templates.py (tests, and every Claude Code build). allowed_deps: every direct dependency must match one (glob). forbidden_deps: must not appear anywhere in the lockfile, so transitive pulls are caught too.",
+  "toolchain_deps": ["typescript", "@types/*", "tailwindcss", "@tailwindcss/*"],
+  "tiers": {
+    "T1": {
+      "name": "Editorial",
+      "summary": "Static pages, CSS-only motion. No JavaScript animation or 3D libraries.",
+      "allowed_deps": ["next", "react", "react-dom", "@fontsource/*", "@fontsource-variable/*"],
+      "forbidden_deps": [
+        "three", "three-*", "@react-three/*", "postprocessing", "@splinetool/*", "babylonjs", "@babylonjs/*", "aframe", "ogl", "pixi.js", "@pixi/*",
+        "gsap", "@gsap/*", "lenis", "@studio-freight/*", "locomotive-scroll", "framer-motion", "motion", "animejs"
+      ]
+    },
+    "T2": {
+      "name": "Scroll Story",
+      "summary": "Adds Lenis smooth scroll, GSAP ScrollTrigger and Framer Motion. Still no 3D.",
+      "allowed_deps": ["next", "react", "react-dom", "@fontsource/*", "@fontsource-variable/*", "gsap", "@gsap/react", "lenis", "framer-motion"],
+      "forbidden_deps": [
+        "three", "three-*", "@react-three/*", "postprocessing", "@splinetool/*", "babylonjs", "@babylonjs/*", "aframe", "ogl", "pixi.js", "@pixi/*",
+        "@studio-freight/*", "locomotive-scroll", "animejs"
+      ]
+    },
+    "T3": {
+      "name": "Flagship 3D",
+      "summary": "Adds Three.js for a lazy-loaded WebGL layer with a low-GPU fallback. No scene editors or second 3D engine.",
+      "allowed_deps": ["next", "react", "react-dom", "@fontsource/*", "@fontsource-variable/*", "gsap", "@gsap/react", "lenis", "framer-motion", "three"],
+      "forbidden_deps": ["@splinetool/*", "babylonjs", "@babylonjs/*", "aframe", "pixi.js", "@pixi/*", "@studio-freight/*", "locomotive-scroll", "animejs"]
+    }
+  },
+  "templates": [
+    {
+      "id": "t1-minimal-editorial",
+      "tier": "T1",
+      "styles": ["minimalism", "neo_brutalism"],
+      "description": "Minimalist editorial: Next.js, Tailwind, CSS-only motion (scroll-driven where supported)."
+    },
+    {
+      "id": "t2-glass-scroll-story",
+      "tier": "T2",
+      "styles": ["glassmorphism"],
+      "description": "Glassmorphism scroll story: Lenis, GSAP ScrollTrigger pinned chapters, Framer Motion micro-interactions."
+    },
+    {
+      "id": "t3-liquid-glass-flagship",
+      "tier": "T3",
+      "styles": ["liquid_glass"],
+      "description": "Flagship liquid glass: lazy-loaded Three.js shader background, GPU tiering, static fallback."
+    }
+  ]
+}

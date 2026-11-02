@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/* Deep-water palette. Components and the shader read these tokens; never raw hex in components. */
+:root {
+  --bg: #05060a;
+  --fg: #f2f4fa;
+  --muted: #9ba3b8;
+  --line: rgb(242 244 250 / 0.12);
+  --accent: #b8f2ff;
+  --glow-a: #3b2fd1;
+  --glow-b: #0fb5d6;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --font-display: var(--font-serif), ui-serif, Georgia, serif;
+  --font-sans: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    font-family: var(--font-sans);
+    letter-spacing: -0.01em;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 0.92;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  .eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  /* The static poster under the shader, and everything low-GPU visitors see. It approximates the
+     shader's palette, so the fade from poster to live glass is seamless. */
+  .liquid-poster {
+    background:
+      radial-gradient(70% 55% at 20% 85%, color-mix(in oklab, var(--glow-a) 70%, transparent), transparent),
+      radial-gradient(60% 50% at 80% 75%, color-mix(in oklab, var(--glow-b) 55%, transparent), transparent),
+      radial-gradient(40% 30% at 60% 60%, color-mix(in oklab, var(--accent) 18%, transparent), transparent),
+      var(--bg);
+  }
+  /* "Solid glass": highlight and edge without backdrop-filter, which would re-blur the live
+     shader every frame. */
+  .panel {
+    background: linear-gradient(150deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.02) 60%);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.16);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 1.2s var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 90ms);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+}

@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agency Control</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: { extend: { fontFamily: { mono: ["ui-monospace", "SFMono-Regular", "Cascadia Code", "Consolas", "monospace"] } } },
+    };
+  </script>
+  <style>
+    body { background: #05070d; }
+    .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scroll-thin::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 9999px; }
+    .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+    @keyframes flash { from { box-shadow: 0 0 0 2px rgba(56,189,248,.55); } to { box-shadow: 0 0 0 0 rgba(56,189,248,0); } }
+    .flash { animation: flash 1.2s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .flash, .animate-spin, .animate-pulse { animation: none !important; } }
+    dialog::backdrop { background: rgba(2,6,23,.7); backdrop-filter: blur(2px); }
+  </style>
+</head>
+<body class="min-h-screen text-slate-200 antialiased">
+  <!-- Header -->
+  <header class="sticky top-0 z-20 border-b border-slate-800/80 bg-[#05070d]/90 backdrop-blur">
+    <div class="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
+      <div class="flex items-center gap-3">
+        <div class="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-sky-500 to-violet-600 text-sm font-bold text-white shadow-lg shadow-sky-900/40">AC</div>
+        <div>
+          <h1 class="text-base font-semibold leading-tight text-white">Agency Control</h1>
+          <p class="text-xs text-slate-500">Multi-agent website pipeline · live</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span id="pill-stream" class="inline-flex items-center gap-1.5 rounded-full border border-slate-700 px-2.5 py-1 text-slate-400">
+          <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span><span>connecting…</span>
+        </span>
+        <span id="pill-worker" class="inline-flex items-center gap-1.5 rounded-full border border-slate-700 px-2.5 py-1 text-slate-400">
+          <span class="h-1.5 w-1.5 rounded-full bg-slate-500"></span><span>worker: unknown</span>
+        </span>
+      </div>
+
+      <dl id="stats" class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-400"></dl>
+
+      <div class="ml-auto flex gap-2">
+        <button data-action="quick-job" class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:border-slate-500 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">Auto-discover</button>
+        <button data-action="new-lead" class="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300">+ New lead</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-[1800px] px-4 py-5 sm:px-6">
+    <!-- Board -->
+    <section aria-label="Pipeline board" id="board"
+      class="scroll-thin grid snap-x auto-cols-[minmax(228px,1fr)] grid-flow-col gap-3 overflow-x-auto pb-3"></section>
+
+    <!-- Lower panels -->
+    <section class="mt-6 grid gap-4 lg:grid-cols-3">
+      <div class="rounded-xl border border-slate-800 bg-slate-900/40 lg:col-span-2">
+        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-slate-200">Live activity</h2>
+          <label class="flex items-center gap-2 text-xs text-slate-500">
+            <input id="feed-verbose" type="checkbox" class="rounded border-slate-600 bg-slate-800"> show node starts
+          </label>
+        </div>
+        <ol id="feed" class="scroll-thin max-h-80 overflow-y-auto px-2 py-2 font-mono text-[12px] leading-5"></ol>
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-900/40">
+        <div class="flex items-center justify-between border-b border-slate-800 px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-slate-200">Finished</h2>
+          <span id="done-count" class="text-xs text-slate-500"></span>
+        </div>
+        <ul id="done" class="scroll-thin max-h-80 divide-y divide-slate-800/70 overflow-y-auto"></ul>
+      </div>
+    </section>
+  </main>
+
+  <!-- Job detail drawer -->
+  <aside id="drawer" class="fixed inset-y-0 right-0 z-30 hidden w-full max-w-xl flex-col border-l border-slate-800 bg-[#070a12] shadow-2xl" aria-label="Job details">
+    <div class="flex items-center justify-between border-b border-slate-800 px-5 py-3">
+      <h2 id="drawer-title" class="truncate text-sm font-semibold text-white"></h2>
+      <button data-action="close-drawer" class="rounded p-1 text-slate-400 hover:text-white" aria-label="Close">✕</button>
+    </div>
+    <div id="drawer-body" class="scroll-thin flex-1 overflow-y-auto px-5 py-4 text-sm"></div>
+  </aside>
+
+  <!-- New lead dialog -->
+  <dialog id="lead-dialog" class="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-0 text-slate-200">
+    <form id="lead-form" method="dialog" class="space-y-3 p-5">
+      <h2 class="text-base font-semibold text-white">Ingest a lead</h2>
+      <label class="block text-xs text-slate-400">Business name
+        <input name="business_name" required maxlength="200" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none">
+      </label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block text-xs text-slate-400">Entity type
+          <select name="entity_type" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none">
+            <option value="company">Company</option>
+            <option value="sole_trader">Sole trader</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </label>
+        <label class="block text-xs text-slate-400">Phone
+          <input name="phone" maxlength="32" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none">
+        </label>
+      </div>
+      <label class="block text-xs text-slate-400">Email
+        <input name="email" type="email" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none">
+      </label>
+      <label class="block text-xs text-slate-400">Address
+        <input name="address" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none">
+      </label>
+      <p id="lead-error" class="hidden text-xs text-rose-400"></p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" data-action="close-dialog" class="rounded-lg px-3 py-1.5 text-sm text-slate-400 hover:text-white">Cancel</button>
+        <button type="submit" class="rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500">Start job</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col gap-2"></div>
+
+<script>
+"use strict";
+
+// ---------------------------------------------------------------- config
+const COLUMNS = [
+  { id: "discovered", title: "Discovered", hint: "Lead found & qualified", dot: "bg-sky-400", text: "text-sky-300", bar: "from-sky-500/70" },
+  { id: "compliance", title: "Compliance Gate", hint: "Needs human sign-off", dot: "bg-amber-400", text: "text-amber-300", bar: "from-amber-500/70" },
+  { id: "building", title: "Building", hint: "Strategy → build → optimizer", dot: "bg-violet-400", text: "text-violet-300", bar: "from-violet-500/70" },
+  { id: "qa", title: "QA", hint: "Build, lint, Lighthouse, console", dot: "bg-fuchsia-400", text: "text-fuchsia-300", bar: "from-fuchsia-500/70" },
+  { id: "preview", title: "Preview Deployed", hint: "Live preview URL", dot: "bg-emerald-400", text: "text-emerald-300", bar: "from-emerald-500/70" },
+  { id: "closing", title: "Closing", hint: "Waiting on the client", dot: "bg-teal-400", text: "text-teal-300", bar: "from-teal-500/70" },
+];
+const NODE_LABEL = {
+  lead_discovery: "Lead discovery", compliance_check: "Compliance check", approval_gate: "Approval gate",
+  strategy: "Strategy", build: "Build", qa: "QA", optimizer: "Optimizer", preview_deploy: "Preview deploy", closing: "Closing",
+};
+const LEVEL_CLASS = { info: "text-slate-300", warn: "text-amber-300", error: "text-rose-300" };
+const ENTITY_BADGE = {
+  company: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  sole_trader: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  unknown: "border-slate-600 bg-slate-800 text-slate-400",
+};
+const LOOP_NODES = new Set(["strategy", "build", "qa", "optimizer"]);
+const MAX_LOG = 60, MAX_FEED = 200;
+
+// ---------------------------------------------------------------- state
+const jobs = new Map();     // job_id -> summary
+const logs = new Map();     // job_id -> [event]
+const feed = [];            // recent events, newest last
+const drafts = new Map();   // job_id -> notes being typed
+const busy = new Set();     // job_ids with a request in flight
+const flashed = new Set();  // job_ids changed since last render
+let workerStatus = null, drawerJob = null, renderQueued = false, pointerDown = false;
+
+// ---------------------------------------------------------------- helpers
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const clock = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+function ago(iso) {
+  if (!iso) return "";
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${Math.floor(s)}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+function toast(msg, kind = "info") {
+  const el = document.createElement("div");
+  el.className = `pointer-events-auto max-w-sm rounded-lg border px-3 py-2 text-sm shadow-lg ${kind === "error"
+    ? "border-rose-500/40 bg-rose-950/90 text-rose-200" : "border-slate-700 bg-slate-900/95 text-slate-200"}`;
+  el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+}
+async function api(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail ?? res.statusText));
+  return data;
+}
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    if (pointerDown) return; // don't swap a button out from under a click; pointerup re-renders
+    render();
+  });
+}
+document.addEventListener("pointerdown", () => { pointerDown = true; });
+document.addEventListener("pointerup", () => { pointerDown = false; setTimeout(scheduleRender, 0); });
+
+// ---------------------------------------------------------------- data in
+function applySummary(s) {
+  const prev = jobs.get(s.job_id);
+  if (prev && prev.updated_at && s.updated_at && s.updated_at < prev.updated_at) return; // stale replay
+  jobs.set(s.job_id, s);
+  flashed.add(s.job_id);
+}
+function onEvent(ev) {
+  if (ev.summary) applySummary(ev.summary);
+  if (ev.job_id) {
+    const arr = logs.get(ev.job_id) || [];
+    arr.push(ev);
+    if (arr.length > MAX_LOG) arr.splice(0, arr.length - MAX_LOG);
+    logs.set(ev.job_id, arr);
+  }
+  feed.push(ev);
+  if (feed.length > MAX_FEED) feed.splice(0, feed.length - MAX_FEED);
+  if (drawerJob && ev.job_id === drawerJob) loadDrawer(drawerJob, false);
+  scheduleRender();
+}
+
+// ---------------------------------------------------------------- rendering
+function statusLine(j) {
+  if (j.running) return `<span class="inline-flex items-center gap-1.5 text-sky-300"><svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".25" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>${esc(NODE_LABEL[j.node] || j.node)} running</span>`;
+  if (j.answer_queued) return `<span class="text-slate-400">Answer queued · worker picking it up…</span>`;
+  if (j.waiting_on === "compliance_approval") return `<span class="inline-flex items-center gap-1.5 font-medium text-amber-300"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400"></span>Awaiting human approval</span>`;
+  if (j.waiting_on === "client_reply") return `<span class="inline-flex items-center gap-1.5 font-medium text-teal-300"><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-400"></span>Awaiting client reply</span>`;
+  if (j.stage === "new") return `<span class="text-slate-400">Queued</span>`;
+  return `<span class="text-slate-400">${esc(NODE_LABEL[j.node] || j.stage)} done</span>`;
+}
+
+function attemptPips(j) {
+  if (!j.build_attempts && j.column !== "building" && j.column !== "qa") return "";
+  const pips = Array.from({ length: j.max_build_attempts }, (_, i) => {
+    const n = i + 1;
+    let c = "bg-slate-700";
+    if (n < j.build_attempts) c = "bg-rose-500/80";
+    if (n === j.build_attempts) c = j.qa && j.qa.build_pass && j.qa.linter_pass && !j.qa.console_errors.length && j.qa.lighthouse_score >= 90 ? "bg-emerald-400" : "bg-violet-400";
+    return `<span class="h-1.5 flex-1 rounded-full ${c}"></span>`;
+  }).join("");
+  return `<div class="mt-3"><div class="mb-1 flex justify-between text-[11px] text-slate-500"><span>Build attempt</span><span>${j.build_attempts}/${j.max_build_attempts}</span></div><div class="flex gap-1">${pips}</div></div>`;
+}
+
+function errorBox(j) {
+  const errs = [];
+  if (j.last_error) errs.push(j.last_error);
+  if (j.build && !j.build.success) errs.push(...j.build.error_logs);
+  if (j.qa && (j.column === "building" || j.column === "qa")) errs.push(...j.qa.console_errors);
+  if (!errs.length) return "";
+  return `<div class="mt-3 rounded-md border border-rose-500/30 bg-rose-950/40 px-2.5 py-2 font-mono text-[11px] leading-4 text-rose-200">${errs.slice(-3).map((e) => `<div class="break-words">✕ ${esc(e)}</div>`).join("")}</div>`;
+}
+
+function logTail(j) {
+  const lines = (logs.get(j.job_id) || [])
+    .filter((e) => e.kind !== "node_started" && (LOOP_NODES.has(e.node) || e.level === "error")).slice(-6);
+  if (!lines.length) return "";
+  return `<ol class="mt-3 space-y-0.5 rounded-md border border-slate-800 bg-black/40 px-2.5 py-2 font-mono text-[11px] leading-4">${lines.map((e) =>
+    `<li class="${LEVEL_CLASS[e.level] || ""} break-words"><span class="text-slate-600">${clock(e.at)}</span> ${esc(e.message)}</li>`).join("")}</ol>`;
+}
+
+function actions(j) {
+  const disabled = busy.has(j.job_id) || j.answer_queued ? "disabled" : "";
+  if (j.waiting_on === "compliance_approval") {
+    return `<div class="mt-3 space-y-2">
+      <input data-notes="${esc(j.job_id)}" value="${esc(drafts.get(j.job_id) || "")}" placeholder="Reviewer notes (optional)" maxlength="2000" ${disabled}
+        class="w-full rounded-md border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 focus:border-amber-500 focus:outline-none disabled:opacity-50">
+      <div class="flex gap-2">
+        <button data-action="approve" data-job="${esc(j.job_id)}" ${disabled} class="flex-1 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-40">Approve</button>
+        <button data-action="reject" data-job="${esc(j.job_id)}" ${disabled} class="rounded-md border border-rose-500/40 px-3 py-1.5 text-xs font-medium text-rose-300 hover:bg-rose-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-40">Reject</button>
+      </div></div>`;
+  }
+  if (j.waiting_on === "client_reply") {
+    return `<div class="mt-3 flex gap-2">
+      <button data-action="accept" data-job="${esc(j.job_id)}" ${disabled} class="flex-1 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-500 disabled:opacity-40">Client accepted</button>
+      <button data-action="decline" data-job="${esc(j.job_id)}" ${disabled} class="rounded-md border border-slate-600 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40">Declined</button></div>`;
+  }
+  return "";
+}
+
+function card(j) {
+  const lead = j.lead || {};
+  const gate = j.waiting_on === "compliance_approval" && !j.answer_queued;
+  const ring = gate ? "border-amber-500/50 shadow-lg shadow-amber-900/20" : j.running ? "border-sky-500/40" : "border-slate-800";
+  const flags = j.column === "compliance" && j.compliance_flags.length
+    ? `<ul class="mt-3 space-y-1">${j.compliance_flags.map((f) => `<li class="rounded border border-amber-500/20 bg-amber-500/5 px-2 py-1 text-[11px] leading-4 text-amber-200">⚠ ${esc(f)}</li>`).join("")}</ul>` : "";
+  const loop = j.column === "building" || j.column === "qa";
+  const preview = j.preview_url ? `<a href="${esc(j.preview_url)}" target="_blank" rel="noopener noreferrer" class="mt-3 block truncate text-xs text-emerald-300 underline decoration-emerald-500/40 hover:text-emerald-200">${esc(j.preview_url)}</a>` : "";
+  const contact = [lead.email, lead.phone].filter(Boolean).map(esc).join(" · ");
+  return `<article data-card="${esc(j.job_id)}" class="${flashed.has(j.job_id) ? "flash" : ""} rounded-xl border ${ring} bg-slate-900/70 p-3.5 transition-colors">
+    <div class="flex items-start justify-between gap-2">
+      <button data-action="open" data-job="${esc(j.job_id)}" class="min-w-0 text-left">
+        <h3 class="truncate text-sm font-semibold text-white hover:underline">${esc(lead.business_name || "Discovering lead…")}</h3>
+        <p class="truncate text-[11px] text-slate-500">${contact || "&nbsp;"}</p>
+      </button>
+      ${lead.entity_type ? `<span class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${ENTITY_BADGE[lead.entity_type] || ENTITY_BADGE.unknown}">${esc(lead.entity_type.replace("_", " "))}</span>` : ""}
+    </div>
+    <div class="mt-2 text-xs">${statusLine(j)}</div>
+    ${flags}
+    ${loop ? attemptPips(j) : ""}
+    ${loop && j.lessons_injected ? `<p class="mt-2 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-200" title="Past verified fixes appended to Claude Code's system prompt">${j.lessons_injected} past fix${j.lessons_injected > 1 ? "es" : ""} injected</p>` : ""}
+    ${errorBox(j)}
+    ${loop ? logTail(j) : ""}
+    ${preview}
+    ${actions(j)}
+    <div class="mt-3 flex justify-between text-[10px] text-slate-600"><span class="font-mono">${esc(j.job_id)}</span><span>${ago(j.updated_at)}</span></div>
+  </article>`;
+}
+
+function outcome(j) {
+  const lead = j.lead || {};
+  if (j.stage === "failed") return ["Failed QA", "text-rose-300 bg-rose-500/10 border-rose-500/30"];
+  if (lead.status === "won") return ["Won", "text-emerald-300 bg-emerald-500/10 border-emerald-500/30"];
+  if (lead.status === "lost") return ["Lost", "text-slate-300 bg-slate-700/40 border-slate-600"];
+  if (lead.status === "rejected") return ["Rejected", "text-amber-300 bg-amber-500/10 border-amber-500/30"];
+  if (lead.status === "disqualified") return ["Disqualified", "text-slate-400 bg-slate-800 border-slate-700"];
+  return [j.stage, "text-slate-400 bg-slate-800 border-slate-700"];
+}
+
+function render() {
+  // Keep focus and caret in a notes box across re-renders.
+  const active = document.activeElement;
+  const focusJob = active && active.dataset ? active.dataset.notes : null;
+  const caret = focusJob ? [active.selectionStart, active.selectionEnd] : null;
+  const scrolls = ["#feed", "#done"].map((s) => $(s).scrollTop);
+
+  const all = [...jobs.values()];
+  const byCol = Object.fromEntries(COLUMNS.map((c) => [c.id, []]));
+  const done = [];
+  for (const j of all) (j.column === "done" ? done : (byCol[j.column] || byCol.discovered)).push(j);
+  const order = (a, b) => (b.waiting_on ? 1 : 0) - (a.waiting_on ? 1 : 0) || String(b.updated_at).localeCompare(String(a.updated_at));
+
+  $("#board").innerHTML = COLUMNS.map((c) => {
+    const items = byCol[c.id].sort(order);
+    return `<div class="flex min-h-[60vh] snap-start flex-col rounded-xl border border-slate-800/80 bg-slate-950/60">
+      <div class="relative px-3.5 pb-2.5 pt-3">
+        <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r ${c.bar} to-transparent"></div>
+        <div class="flex items-center justify-between">
+          <h2 class="flex items-center gap-2 text-sm font-semibold ${c.text}"><span class="h-2 w-2 rounded-full ${c.dot}"></span>${c.title}</h2>
+          <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] tabular-nums text-slate-300">${items.length}</span>
+        </div>
+        <p class="mt-0.5 text-[11px] text-slate-500">${c.hint}</p>
+      </div>
+      <div class="flex-1 space-y-3 px-2.5 pb-3">${items.map(card).join("") || `<p class="px-1 py-6 text-center text-xs text-slate-600">No jobs</p>`}</div>
+    </div>`;
+  }).join("");
+
+  done.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+  $("#done-count").textContent = done.length ? `${done.length} shown` : "";
+  $("#done").innerHTML = done.map((j) => {
+    const [label, cls] = outcome(j);
+    return `<li><button data-action="open" data-job="${esc(j.job_id)}" class="flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-slate-800/40">
+      <span class="min-w-0 flex-1"><span class="block truncate text-sm text-slate-200">${esc((j.lead || {}).business_name || j.job_id)}</span>
+      <span class="block font-mono text-[10px] text-slate-600">${esc(j.job_id)} · ${ago(j.updated_at)}</span></span>
+      <span class="shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${cls}">${esc(label)}</span></button></li>`;
+  }).join("") || `<li class="px-4 py-6 text-center text-xs text-slate-600">Nothing finished yet</li>`;
+
+  const verbose = $("#feed-verbose").checked;
+  $("#feed").innerHTML = feed.filter((e) => verbose || e.kind !== "node_started").slice(-120).reverse().map((e) =>
+    `<li class="flex gap-2 rounded px-2 hover:bg-slate-800/40 ${e.kind === "node_started" ? "opacity-50" : ""}">
+      <span class="shrink-0 text-slate-600">${clock(e.at)}</span>
+      <button data-action="open" data-job="${esc(e.job_id)}" class="shrink-0 text-sky-400/80 hover:text-sky-300">${esc(e.job_id || "-")}</button>
+      <span class="shrink-0 text-slate-500">${esc(e.node || e.kind)}</span>
+      <span class="min-w-0 break-words ${LEVEL_CLASS[e.level] || ""}">${esc(e.message)}</span></li>`).join("")
+    || `<li class="px-2 py-6 text-center text-slate-600">Waiting for events…</li>`;
+
+  const awaiting = all.filter((j) => j.waiting_on === "compliance_approval" && !j.answer_queued).length;
+  $("#stats").innerHTML = [["Active", all.length - done.length], ["Awaiting approval", awaiting], ["Building", byCol.building.length + byCol.qa.length], ["Finished", done.length]]
+    .map(([k, v]) => `<div class="flex gap-1.5"><dt>${k}</dt><dd class="font-semibold tabular-nums ${k === "Awaiting approval" && v ? "text-amber-300" : "text-slate-200"}">${v}</dd></div>`).join("");
+  document.title = awaiting ? `(${awaiting}) Agency Control` : "Agency Control";
+
+  flashed.clear();
+  ["#feed", "#done"].forEach((s, i) => { $(s).scrollTop = scrolls[i]; });
+  if (focusJob) {
+    const el = document.querySelector(`[data-notes="${CSS.escape(focusJob)}"]`);
+    if (el && !el.disabled) { el.focus(); el.setSelectionRange(caret[0], caret[1]); }
+  }
+}
+
+function setPill(id, state, label) {
+  const colors = { ok: ["border-emerald-500/40 text-emerald-300", "bg-emerald-400"], warn: ["border-amber-500/40 text-amber-300", "bg-amber-400 animate-pulse"], bad: ["border-rose-500/40 text-rose-300", "bg-rose-400"] }[state];
+  const el = $(id);
+  el.className = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${colors[0]}`;
+  el.innerHTML = `<span class="h-1.5 w-1.5 rounded-full ${colors[1]}"></span><span>${esc(label)}</span>`;
+}
+function renderWorkers() {
+  if (!workerStatus) return;
+  const online = workerStatus.workers.filter((w) => w.online);
+  if (!online.length) return setPill("#pill-worker", "bad", "worker offline");
+  const inflight = online.reduce((n, w) => n + w.inflight, 0);
+  setPill("#pill-worker", "ok", `${online.length} worker${online.length > 1 ? "s" : ""} · ${inflight} running`);
+}
+
+// ---------------------------------------------------------------- drawer
+async function loadDrawer(jobId, show = true) {
+  drawerJob = jobId;
+  if (show) { $("#drawer").classList.remove("hidden"); $("#drawer").classList.add("flex"); $("#drawer-title").textContent = jobId; $("#drawer-body").innerHTML = `<p class="text-slate-500">Loading…</p>`; }
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+  if (!res.ok) { $("#drawer-body").innerHTML = `<p class="text-rose-300">Could not load job.</p>`; return; }
+  const { job, events, queue } = await res.json();
+  if (drawerJob !== jobId) return;
+  const lead = job.lead || {};
+  $("#drawer-title").textContent = `${lead.business_name || jobId}`;
+  const facts = [
+    ["Job", job.job_id], ["Stage", job.stage], ["Column", job.column], ["Entity", lead.entity_type], ["Email", lead.email], ["Phone", lead.phone],
+    ["Compliance", job.compliance_decision], ["Reviewer notes", job.reviewer_notes], ["Build attempts", `${job.build_attempts}/${job.max_build_attempts}`],
+    ["Commit", job.build && job.build.commit_hash], ["Lighthouse", job.qa && job.qa.lighthouse_score],
+    ["Lessons", job.lessons_injected || job.lessons_recorded ? `${job.lessons_injected || 0} injected · ${job.lessons_recorded || 0} banked` : null], ["Preview", job.preview_url], ["Client", job.client_response],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== "");
+  $("#drawer-body").innerHTML = `
+    <dl class="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5 text-xs">${facts.map(([k, v]) => `<dt class="text-slate-500">${k}</dt><dd class="break-all text-slate-200">${esc(v)}</dd>`).join("")}</dl>
+    ${job.optimizer_feedback.length ? `<h3 class="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-400">Optimizer feedback</h3><ul class="mt-2 list-disc space-y-1 pl-5 text-xs text-violet-200">${job.optimizer_feedback.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+    <h3 class="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-400">Event log</h3>
+    <ol class="mt-2 space-y-0.5 rounded-md border border-slate-800 bg-black/40 p-2.5 font-mono text-[11px] leading-4">${events.map((e) =>
+      `<li class="${LEVEL_CLASS[e.level] || ""} ${e.kind === "node_started" ? "opacity-50" : ""} break-words"><span class="text-slate-600">${clock(e.at)}</span> <span class="text-slate-500">${esc(e.node || e.kind)}</span> ${esc(e.message)}</li>`).join("")}</ol>
+    <h3 class="mt-5 text-xs font-semibold uppercase tracking-wide text-slate-400">Queue</h3>
+    <ul class="mt-2 space-y-1 font-mono text-[11px]">${queue.map((q) => `<li class="text-slate-400">#${q.id} ${esc(q.kind)}${q.expect ? `(${esc(q.expect)})` : ""} · <span class="${q.status === "failed" ? "text-rose-300" : q.status === "skipped" ? "text-amber-300" : "text-slate-300"}">${esc(q.status)}</span> · tries ${q.attempts}${q.last_error ? ` · ${esc(q.last_error)}` : ""}</li>`).join("")}</ul>
+    <details class="mt-5"><summary class="cursor-pointer text-xs text-slate-500">Raw summary</summary><pre class="mt-2 overflow-x-auto rounded-md bg-black/50 p-3 text-[11px] text-slate-400">${esc(JSON.stringify(job, null, 2))}</pre></details>`;
+}
+function closeDrawer() { drawerJob = null; $("#drawer").classList.add("hidden"); $("#drawer").classList.remove("flex"); }
+
+// ---------------------------------------------------------------- interactions
+async function answer(jobId, path, body, ok) {
+  busy.add(jobId); scheduleRender();
+  try { await api(`/api/jobs/${encodeURIComponent(jobId)}/${path}`, body); toast(ok); drafts.delete(jobId); }
+  catch (err) { toast(err.message, "error"); }
+  finally { busy.delete(jobId); scheduleRender(); }
+}
+
+document.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const job = el.dataset.job;
+  switch (el.dataset.action) {
+    case "approve": return answer(job, "approval", { approved: true, notes: drafts.get(job) || null }, "Approved — outreach unlocked");
+    case "reject": return answer(job, "approval", { approved: false, notes: drafts.get(job) || null }, "Rejected");
+    case "accept": return answer(job, "client-reply", { accepted: true }, "Marked as accepted");
+    case "decline": return answer(job, "client-reply", { accepted: false }, "Marked as declined");
+    case "open": if (job) loadDrawer(job); return;
+    case "close-drawer": return closeDrawer();
+    case "new-lead": $("#lead-error").classList.add("hidden"); return $("#lead-dialog").showModal();
+    case "close-dialog": return $("#lead-dialog").close();
+    case "quick-job":
+      try { const r = await api("/api/jobs", {}); toast(`Queued ${r.job_id}`); } catch (err) { toast(err.message, "error"); }
+      return;
+  }
+});
+document.addEventListener("input", (e) => { if (e.target.dataset && e.target.dataset.notes) drafts.set(e.target.dataset.notes, e.target.value); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && drawerJob) closeDrawer(); });
+$("#feed-verbose").addEventListener("change", scheduleRender);
+
+$("#lead-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const lead = Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v).trim() || null]));
+  try {
+    const r = await api("/api/jobs", { lead });
+    toast(`Queued ${r.job_id} for ${lead.business_name}`);
+    e.target.reset();
+    $("#lead-dialog").close();
+  } catch (err) {
+    $("#lead-error").textContent = err.message;
+    $("#lead-error").classList.remove("hidden");
+  }
+});
+
+// ---------------------------------------------------------------- live connection
+function connect() {
+  const es = new EventSource("/api/events");
+  es.addEventListener("open", () => setPill("#pill-stream", "ok", "live"));
+  es.addEventListener("error", () => setPill("#pill-stream", "warn", "reconnecting…"));
+  es.addEventListener("job", (e) => onEvent(JSON.parse(e.data)));
+  es.addEventListener("workers", (e) => { workerStatus = JSON.parse(e.data); renderWorkers(); });
+}
+
+(async function init() {
+  try {
+    const res = await fetch("/api/jobs");
+    for (const s of await res.json()) jobs.set(s.job_id, s);
+  } catch { toast("Could not load jobs", "error"); }
+  render();
+  connect();
+  setInterval(scheduleRender, 15000); // refresh relative times
+})();
+</script>
+</body>
+</html>

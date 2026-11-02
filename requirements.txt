@@ -1,0 +1,4 @@
+# Dependencies live in pyproject.toml; this installs them (plus dev tools) in editable mode.
+-e .[dev]
+# xxhash 4.x wheels are blocked by Windows Smart App Control on this machine; 3.x loads fine.
+xxhash<4

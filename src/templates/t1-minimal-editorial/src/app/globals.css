@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+/* Paper-white editorial palette. Components use these tokens, never raw hex. */
+:root {
+  --bg: #f4f1ea;
+  --fg: #151311;
+  --muted: #6b655c;
+  --line: rgb(21 19 17 / 0.14);
+  --accent: #9a3412;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --font-display: var(--font-serif), ui-serif, Georgia, serif;
+  --font-sans: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    font-family: var(--font-sans);
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: var(--fg);
+    color: var(--bg);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  .eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  /* Underline that draws in on hover: transform only. */
+  .ink {
+    position: relative;
+  }
+  .ink::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 -0.1em 0;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.5s var(--ease-out);
+  }
+  .ink:hover::after,
+  .ink:focus-visible::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+}
+
+/* CSS-only motion (T1 ships no animation JavaScript).
+   .rise    load-in, staggered with style="--i: n"
+   .reveal  scroll-driven, where the browser supports view timelines
+   Without support or with reduced motion, everything is simply visible. */
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 1.1s var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 90ms);
+  }
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 28%;
+    }
+    .reveal-media > * {
+      animation: settle linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 50%;
+    }
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(48px);
+  }
+}
+@keyframes settle {
+  from {
+    transform: scale(1.12);
+  }
+}
